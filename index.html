@@ -1334,7 +1334,1056 @@
     </div>
     
     <script>
-        // [THE REST OF THE JAVASCRIPT CODE CONTINUES HERE - IT'S TOO LONG TO FIT IN ONE MESSAGE]
+        // Simple word choices for demonstration
+        const wordChoices = {
+            start: [
+                { word: 'Cat', emoji: '🐱' },
+                { word: 'Dog', emoji: '🐶' }
+            ],
+            catMiddle: [
+                { word: 'sleeping', emoji: '😴', prob: 0.5 },
+                { word: 'hungry', emoji: '🍽️', prob: 0.3 },
+                { word: 'playful', emoji: '🎾', prob: 0.2 }
+            ],
+            dogMiddle: [
+                { word: 'playful', emoji: '🎾', prob: 0.5 },
+                { word: 'hungry', emoji: '🍽️', prob: 0.3 },
+                { word: 'sleeping', emoji: '😴', prob: 0.2 }
+            ],
+            sleepingEnd: [
+                { word: 'sofa', emoji: '🛋️', prob: 0.6 },
+                { word: 'window', emoji: '🪟', prob: 0.4 }
+            ],
+            hungryEnd: [
+                { word: 'kitchen', emoji: '🍳', prob: 0.7 },
+                { word: 'sofa', emoji: '🛋️', prob: 0.3 }
+            ],
+            playfulEnd: [
+                { word: 'yard', emoji: '🌳', prob: 0.6 },
+                { word: 'sofa', emoji: '🛋️', prob: 0.4 }
+            ]
+        };
+        
+        // Seeded random for consistent results
+        function mulberry32(a) {
+            return function() {
+                let t = a += 0x6D2B79F5;
+                t = Math.imul(t^t>>>15, t|1);
+                t ^= t + Math.imul(t^t>>>7, t|61);
+                return ((t^t>>>14)>>>0) / 4294967296;
+            }
+        }
+        
+        let rng = mulberry32(Date.now());
+        let currentSequence = [];
+        let patterns = {};
+        let liveGenerationTimer = null;
+        let currentTargetPattern = '🐶😴🪟';
+        
+        // Network tab data
+        let networkMode = 'manual';
+        let aiMode = 'simulation';
+        let networkConnections = {
+            forward1: 0.5,
+            forward2: 0.5,
+            backward: 0.3
+        };
+        
+        const patternWheelData = {
+            'question': { emoji: '❓', prob: 0.33 },
+            'statement': { emoji: '📝', prob: 0.33 },
+            'command': { emoji: '⚡', prob: 0.34 }
+        };
+        
+        const conceptWheelData = {
+            question: {
+                'what': { emoji: '🔍', prob: 0.4 },
+                'why': { emoji: '💭', prob: 0.3 },
+                'how': { emoji: '⚙️', prob: 0.3 }
+            },
+            statement: {
+                'fact': { emoji: '📊', prob: 0.4 },
+                'opinion': { emoji: '💬', prob: 0.3 },
+                'description': { emoji: '🖼️', prob: 0.3 }
+            },
+            command: {
+                'action': { emoji: '🎯', prob: 0.4 },
+                'object': { emoji: '📦', prob: 0.3 },
+                'modifier': { emoji: '✨', prob: 0.3 }
+            }
+        };
+        
+        const wordWheelData = {
+            what: ['fish', 'mice', 'food', 'water'],
+            why: ['hungry', 'curious', 'playful'],
+            how: ['quickly', 'slowly', 'carefully'],
+            fact: ['cats', 'dogs', 'exist'],
+            opinion: ['good', 'interesting', 'important'],
+            description: ['furry', 'small', 'cute'],
+            action: ['run', 'jump', 'play'],
+            object: ['ball', 'toy', 'treat'],
+            modifier: ['very', 'quite', 'extremely']
+        };
+        
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabId = btn.dataset.tab;
+                
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.getElementById(tabId).classList.add('active');
+                
+                // Initialize tabs
+                if (tabId === 'challenge') {
+                    generateNewChallenge();
+                } else if (tabId === 'network') {
+                    initializeNetworkWheels();
+                }
+            });
+        });
+        
+        // Apply temperature to probabilities
+        function applyTemperature(probs, temperature) {
+            if (temperature === 0) temperature = 0.01;
+            
+            const scaled = probs.map(p => Math.pow(p, 1/temperature));
+            const sum = scaled.reduce((a, b) => a + b, 0);
+            return scaled.map(s => s / sum);
+        }
+        
+        // Apply top-p filtering
+        function applyFavoritesFilter(choices, probs, pCut) {
+            if (pCut >= 0.99) return { choices, probs };
+            
+            const indexed = probs.map((p, i) => ({prob: p, idx: i}))
+                                 .sort((a, b) => b.prob - a.prob);
+            
+            let cumSum = 0;
+            const keep = [];
+            
+            for (const item of indexed) {
+                keep.push(item.idx);
+                cumSum += item.prob;
+                if (cumSum >= pCut) break;
+            }
+            
+            const keptChoices = keep.map(i => choices[i]);
+            const keptProbs = keep.map(i => probs[i]);
+            const sum = keptProbs.reduce((a, b) => a + b, 0);
+            
+            return { 
+                choices: keptChoices, 
+                probs: keptProbs.map(p => p / sum) 
+            };
+        }
+        
+        // Apply repetition penalty
+        function applyNoRepeatNudge(choices, probs, historyEmojis, strength = 0.2) {
+            const adjustedProbs = probs.slice();
+            choices.forEach((choice, i) => {
+                if (historyEmojis.includes(choice.emoji)) {
+                    adjustedProbs[i] *= (1 - strength);
+                }
+            });
+            const sum = adjustedProbs.reduce((a, b) => a + b, 0);
+            return adjustedProbs.map(p => p / sum);
+        }
+        
+        // Create wheel sections
+        function createWheel(choices, probabilities, wheelId = 'spinnerWheel') {
+            const wheel = document.getElementById(wheelId);
+            if (!wheel) return;
+            
+            wheel.innerHTML = '';
+            wheel.style.background = '';
+            
+            if (!choices || choices.length === 0) return;
+            
+            let currentAngle = 0;
+            const sections = [];
+            
+            choices.forEach((choice, i) => {
+                const prob = probabilities[i];
+                const angle = prob * 360;
+                const endAngle = currentAngle + angle;
+                
+                let color;
+                if (prob > 0.4) {
+                    color = '#10b981';
+                } else if (prob > 0.2) {
+                    color = '#f59e0b';
+                } else {
+                    color = '#8b5cf6';
+                }
+                
+                sections.push({
+                    start: currentAngle,
+                    end: endAngle,
+                    color: color,
+                    label: choice.emoji
+                });
+                
+                currentAngle = endAngle;
+            });
+            
+            const gradientParts = [];
+            sections.forEach(section => {
+                const startPercent = (section.start / 360) * 100;
+                const endPercent = (section.end / 360) * 100;
+                gradientParts.push(`${section.color} ${startPercent}% ${endPercent}%`);
+            });
+            
+            wheel.style.background = `conic-gradient(${gradientParts.join(', ')})`;
+            
+            sections.forEach((section, i) => {
+                const midAngle = (section.start + section.end) / 2;
+                const labelRadius = 80;
+                const x = Math.cos((midAngle - 90) * Math.PI / 180) * labelRadius + 140;
+                const y = Math.sin((midAngle - 90) * Math.PI / 180) * labelRadius + 140;
+                
+                const label = document.createElement('div');
+                label.className = 'spinner-label';
+                label.textContent = section.label;
+                label.style.left = x + 'px';
+                label.style.top = y + 'px';
+                label.style.transform = 'translate(-50%, -50%)';
+                wheel.appendChild(label);
+            });
+            
+            return sections;
+        }
+        
+        // Spin animation
+        async function spinWheel(position) {
+            const wheel = document.getElementById('spinnerWheel');
+            const titles = ['Choosing the Start...', 'Choosing the Middle...', 'Choosing the End!'];
+            document.getElementById('stageTitle').textContent = titles[position];
+            
+            const contextFill = document.getElementById('contextFill');
+            contextFill.style.width = ((position + 1) / 3 * 100) + '%';
+            
+            const quickMode = document.getElementById('quickMode').checked;
+            
+            let choices, probs;
+            const historyEmojis = currentSequence.map(w => {
+                const all = [...wordChoices.start, ...wordChoices.catMiddle, ...wordChoices.dogMiddle,
+                           ...wordChoices.sleepingEnd, ...wordChoices.hungryEnd, ...wordChoices.playfulEnd];
+                const found = all.find(c => c.word === w);
+                return found ? found.emoji : '';
+            });
+            
+            if (position === 0) {
+                choices = wordChoices.start;
+                probs = [0.5, 0.5];
+            } else if (position === 1) {
+                const firstWord = currentSequence[0];
+                choices = firstWord === 'Cat' ? wordChoices.catMiddle : wordChoices.dogMiddle;
+                probs = choices.map(c => c.prob);
+                
+                const avoidStrength = parseFloat(document.getElementById('avoidRepeats').value);
+                probs = applyNoRepeatNudge(choices, probs, historyEmojis, avoidStrength);
+            } else {
+                const middleWord = currentSequence[1];
+                const endKey = middleWord + 'End';
+                choices = wordChoices[endKey];
+                probs = choices.map(c => c.prob);
+                
+                const avoidStrength = parseFloat(document.getElementById('avoidRepeats').value);
+                probs = applyNoRepeatNudge(choices, probs, historyEmojis, avoidStrength);
+            }
+            
+            const creativity = parseFloat(document.getElementById('creativity').value);
+            probs = applyTemperature(probs, creativity);
+            
+            const pCut = parseFloat(document.getElementById('favorites').value);
+            const filtered = applyFavoritesFilter(choices, probs, pCut);
+            choices = filtered.choices;
+            probs = filtered.probs;
+            
+            const sections = createWheel(choices, probs);
+            
+            if (quickMode) {
+                wheel.classList.add('fast');
+            }
+            
+            wheel.classList.add('spinning');
+            
+            const spinDuration = quickMode ? 800 : 3000;
+            await new Promise(resolve => setTimeout(resolve, spinDuration));
+            
+            const random = rng();
+            let cumProb = 0;
+            let selected = choices[0];
+            
+            for (let i = 0; i < probs.length; i++) {
+                cumProb += probs[i];
+                if (random <= cumProb) {
+                    selected = choices[i];
+                    break;
+                }
+            }
+            
+            currentSequence.push(selected.word);
+            
+            const selectedSection = sections.find(s => s.label === selected.emoji);
+            if (selectedSection) {
+                const stopAngle = (selectedSection.start + selectedSection.end) / 2;
+                wheel.style.transform = `rotate(${1800 - stopAngle}deg)`;
+            }
+            wheel.classList.remove('spinning', 'fast');
+            
+            const strip = document.getElementById('comicStrip');
+            const bubble = document.createElement('div');
+            bubble.className = 'comic-bubble';
+            bubble.textContent = selected.emoji;
+            strip.appendChild(bubble);
+            
+            if (probs[choices.indexOf(selected)] < 0.15) {
+                createSparkle();
+            }
+        }
+        
+        // Start spinning
+        async function startSpinning() {
+            currentSequence = [];
+            document.getElementById('spinnerStage').classList.add('active');
+            document.getElementById('comicStrip').innerHTML = '';
+            document.getElementById('contextFill').style.width = '0%';
+            
+            rng = mulberry32(Date.now());
+            
+            for (let i = 0; i < 3; i++) {
+                await spinWheel(i);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+        
+        // Create sparkle effect
+        function createSparkle() {
+            const sparkle = document.createElement('div');
+            sparkle.className = 'sparkle';
+            sparkle.textContent = '✨';
+            sparkle.style.left = Math.random() * window.innerWidth + 'px';
+            sparkle.style.top = Math.random() * window.innerHeight + 'px';
+            document.body.appendChild(sparkle);
+            
+            setTimeout(() => sparkle.remove(), 1000);
+        }
+        
+        // Create confetti
+        function createConfetti() {
+            for (let i = 0; i < 30; i++) {
+                setTimeout(() => {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = Math.random() * window.innerWidth + 'px';
+                    confetti.style.backgroundColor = 
+                        ['#0f766e', '#10b981', '#f59e0b'][Math.floor(Math.random() * 3)];
+                    document.body.appendChild(confetti);
+                    
+                    setTimeout(() => confetti.remove(), 3000);
+                }, i * 50);
+            }
+        }
+        
+        // Generate many patterns
+        async function generateMany() {
+            const gallery = document.getElementById('patternGallery');
+            gallery.innerHTML = '';
+            patterns = {};
+            
+            const count = parseInt(document.getElementById('patternCount').value);
+            const useSamePatterns = document.getElementById('samePatterns').checked;
+            
+            const spinnerStage = document.getElementById('patternSpinner');
+            spinnerStage.style.display = 'block';
+            
+            const wheel = document.getElementById('patternWheel');
+            const creativity = parseFloat(document.getElementById('creativity').value);
+            const pCut = parseFloat(document.getElementById('favorites').value);
+            
+            // Show animation stages
+            document.querySelector('#patternSpinner .stage-title').textContent = 'Stage 1: Start';
+            let choices = wordChoices.start;
+            let probs = [0.5, 0.5];
+            probs = applyTemperature(probs, creativity);
+            const filtered1 = applyFavoritesFilter(choices, probs, pCut);
+            createWheel(filtered1.choices, filtered1.probs, 'patternWheel');
+            
+            wheel.classList.add('spinning', 'fast');
+            await new Promise(resolve => setTimeout(resolve, 800));
+            wheel.classList.remove('spinning', 'fast');
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            document.querySelector('#patternSpinner .stage-title').textContent = 'Stage 2: Middle';
+            choices = wordChoices.catMiddle;
+            probs = choices.map(c => c.prob);
+            probs = applyTemperature(probs, creativity);
+            const filtered2 = applyFavoritesFilter(choices, probs, pCut);
+            createWheel(filtered2.choices, filtered2.probs, 'patternWheel');
+            
+            wheel.classList.add('spinning', 'fast');
+            await new Promise(resolve => setTimeout(resolve, 800));
+            wheel.classList.remove('spinning', 'fast');
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            document.querySelector('#patternSpinner .stage-title').textContent = 'Stage 3: End';
+            choices = wordChoices.sleepingEnd;
+            probs = choices.map(c => c.prob);
+            probs = applyTemperature(probs, creativity);
+            const filtered3 = applyFavoritesFilter(choices, probs, pCut);
+            createWheel(filtered3.choices, filtered3.probs, 'patternWheel');
+            
+            wheel.classList.add('spinning', 'fast');
+            await new Promise(resolve => setTimeout(resolve, 800));
+            wheel.classList.remove('spinning', 'fast');
+            
+            document.querySelector('#patternSpinner .stage-title').textContent = 'Generating patterns...';
+            
+            if (useSamePatterns) {
+                rng = mulberry32(12345);
+            } else {
+                rng = mulberry32(Math.floor(Math.random() * 1000000));
+            }
+            
+            // Generate patterns
+            for (let i = 0; i < count; i++) {
+                const sequence = [];
+                const historyEmojis = [];
+                
+                const catBias = 0.5;
+                let firstWord;
+                if (rng() < catBias) {
+                    firstWord = wordChoices.start[0];
+                } else {
+                    firstWord = wordChoices.start[1];
+                }
+                sequence.push(firstWord.emoji);
+                historyEmojis.push(firstWord.emoji);
+                
+                const middleChoices = firstWord.word === 'Cat' ? wordChoices.catMiddle : wordChoices.dogMiddle;
+                let middleProbs = middleChoices.map(c => c.prob);
+                
+                middleProbs = applyTemperature(middleProbs, creativity);
+                
+                const filteredMiddle = applyFavoritesFilter(middleChoices, middleProbs, pCut);
+                
+                let cumProb = 0;
+                const middleRandom = rng();
+                let middleWord = filteredMiddle.choices[0];
+                
+                for (let j = 0; j < filteredMiddle.probs.length; j++) {
+                    cumProb += filteredMiddle.probs[j];
+                    if (middleRandom <= cumProb) {
+                        middleWord = filteredMiddle.choices[j];
+                        break;
+                    }
+                }
+                sequence.push(middleWord.emoji);
+                historyEmojis.push(middleWord.emoji);
+                
+                const endKey = middleWord.word + 'End';
+                const endChoices = wordChoices[endKey];
+                if (!endChoices) continue;
+                
+                let endProbs = endChoices.map(c => c.prob);
+                
+                const avoidStrength = parseFloat(document.getElementById('avoidRepeats').value);
+                endProbs = applyNoRepeatNudge(endChoices, endProbs, historyEmojis, avoidStrength);
+                
+                endProbs = applyTemperature(endProbs, creativity);
+                
+                const filteredEnd = applyFavoritesFilter(endChoices, endProbs, pCut);
+                
+                cumProb = 0;
+                const endRandom = rng();
+                let endWord = filteredEnd.choices[0];
+                
+                for (let j = 0; j < filteredEnd.probs.length; j++) {
+                    cumProb += filteredEnd.probs[j];
+                    if (endRandom <= cumProb) {
+                        endWord = filteredEnd.choices[j];
+                        break;
+                    }
+                }
+                sequence.push(endWord.emoji);
+                
+                const patternKey = sequence.join('');
+                patterns[patternKey] = (patterns[patternKey] || 0) + 1;
+            }
+            
+            document.querySelector('#patternSpinner .stage-title').textContent = 'Your settings affect all stages!';
+            
+            const patternArray = Object.entries(patterns);
+            patternArray.sort((a, b) => b[1] - a[1]);
+            
+            const uniqueCount = patternArray.length;
+            const duplicateCount = patternArray.filter(([_, c]) => c > 1).length;
+            const seedInfo = useSamePatterns ? ' (using fixed seed - same every time)' : ' (using random seed - different every time)';
+            document.getElementById('patternLegend').textContent = 
+                `Generated ${count} patterns${seedInfo}: ${duplicateCount} duplicates (big tiles), ${uniqueCount - duplicateCount} unique (small tiles)`;
+            
+            patternArray.forEach(([pattern, count], index) => {
+                const chip = document.createElement('div');
+                chip.className = 'pattern-chip';
+                
+                if (index === 0 && count > 2) {
+                    chip.classList.add('common');
+                } else if (count === 1) {
+                    chip.classList.add('rare');
+                }
+                
+                chip.textContent = pattern;
+                
+                const countLabel = document.createElement('div');
+                countLabel.className = 'pattern-count';
+                countLabel.textContent = count;
+                chip.appendChild(countLabel);
+                
+                gallery.appendChild(chip);
+            });
+        }
+        
+        // Generate new challenge
+        function generateNewChallenge() {
+            const starts = ['🐱', '🐶'];
+            const start = starts[Math.floor(Math.random() * 2)];
+            
+            let middles;
+            if (start === '🐱') {
+                middles = ['😴', '🍽️', '🎾'];
+            } else {
+                middles = ['🎾', '🍽️', '😴'];
+            }
+            const middle = middles[Math.floor(Math.random() * 3)];
+            
+            let ends;
+            if (middle === '😴') {
+                ends = ['🛋️', '🪟'];
+            } else if (middle === '🍽️') {
+                ends = ['🍳', '🛋️'];
+            } else {
+                ends = ['🌳', '🛋️'];
+            }
+            const end = ends[Math.floor(Math.random() * 2)];
+            
+            currentTargetPattern = start + middle + end;
+            
+            const targetSequence = document.getElementById('targetSequence');
+            targetSequence.innerHTML = `
+                <div class="target-piece">${start}</div>
+                <div class="target-arrow">→</div>
+                <div class="target-piece">${middle}</div>
+                <div class="target-arrow">→</div>
+                <div class="target-piece">${end}</div>
+            `;
+            
+            document.getElementById('startBias').value = 50;
+            document.getElementById('challengeCreativity').value = 1.0;
+            document.getElementById('challengeFavorites').value = 0.8;
+            
+            updateLiveGeneration();
+        }
+        
+        // Generate challenge sequence
+        function generateChallengeSequence() {
+            const sequence = [];
+            const historyEmojis = [];
+            
+            const catBias = parseFloat(document.getElementById('startBias').value) / 100;
+            const creativity = parseFloat(document.getElementById('challengeCreativity').value);
+            const pCut = parseFloat(document.getElementById('challengeFavorites').value);
+            
+            const firstWord = rng() < catBias ? wordChoices.start[0] : wordChoices.start[1];
+            sequence.push(firstWord.emoji);
+            historyEmojis.push(firstWord.emoji);
+            
+            const middleChoices = firstWord.word === 'Cat' ? wordChoices.catMiddle : wordChoices.dogMiddle;
+            let middleProbs = applyTemperature(middleChoices.map(c => c.prob), creativity);
+            
+            const filteredMiddle = applyFavoritesFilter(middleChoices, middleProbs, pCut);
+            
+            let cumProb = 0;
+            const middleRandom = rng();
+            for (let i = 0; i < filteredMiddle.probs.length; i++) {
+                cumProb += filteredMiddle.probs[i];
+                if (middleRandom <= cumProb) {
+                    sequence.push(filteredMiddle.choices[i].emoji);
+                    historyEmojis.push(filteredMiddle.choices[i].emoji);
+                    
+                    const endKey = filteredMiddle.choices[i].word + 'End';
+                    const endChoices = wordChoices[endKey];
+                    let endProbs = applyTemperature(endChoices.map(c => c.prob), creativity);
+                    
+                    const filteredEnd = applyFavoritesFilter(endChoices, endProbs, pCut);
+                    
+                    cumProb = 0;
+                    const endRandom = rng();
+                    for (let j = 0; j < filteredEnd.probs.length; j++) {
+                        cumProb += filteredEnd.probs[j];
+                        if (endRandom <= cumProb) {
+                            sequence.push(filteredEnd.choices[j].emoji);
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            return sequence.join('');
+        }
+        
+        // Update live generation
+        function updateLiveGeneration() {
+            clearTimeout(liveGenerationTimer);
+            
+            liveGenerationTimer = setTimeout(() => {
+                const container = document.getElementById('livePatterns');
+                container.innerHTML = '';
+                
+                const baseSeed = Date.now();
+                
+                for (let i = 0; i < 5; i++) {
+                    rng = mulberry32(baseSeed + i * 1000);
+                    const sequence = generateChallengeSequence();
+                    
+                    const pattern = document.createElement('div');
+                    pattern.className = 'live-pattern';
+                    pattern.textContent = sequence;
+                    pattern.style.animationDelay = `${i * 0.1}s`;
+                    container.appendChild(pattern);
+                }
+                
+                updateSuccessRate();
+            }, 100);
+        }
+        
+        // Update success rate
+        function updateSuccessRate() {
+            let hits = 0;
+            const attempts = 100;
+            
+            const baseSeed = Date.now();
+            
+            for (let i = 0; i < attempts; i++) {
+                rng = mulberry32(baseSeed + i);
+                const sequence = generateChallengeSequence();
+                if (sequence === currentTargetPattern) {
+                    hits++;
+                }
+            }
+            
+            const successRate = (hits / attempts * 100).toFixed(1);
+            document.getElementById('successRate').textContent = successRate + '%';
+            document.getElementById('successChance').textContent = successRate + '%';
+            
+            const tipText = document.getElementById('tipText');
+            const rate = parseFloat(successRate);
+            
+            if (rate < 5) {
+                tipText.textContent = "💡 Hey! I'd slide that bias ALL the way to the right animal and turn creativity way down!";
+            } else if (rate < 15) {
+                tipText.textContent = "🎯 Getting warmer! Keep that creativity low for consistent results.";
+            } else if (rate < 30) {
+                tipText.textContent = "✨ Nice progress! You're figuring out the pattern.";
+            } else {
+                tipText.textContent = "🏆 Wow, you've mastered it! That's a great setup!";
+            }
+        }
+        
+        // Network functions
+        function initializeNetworkWheels() {
+            if (!document.getElementById('patternWheel')) return;
+            
+            createNetworkWheel('patternWheel', Object.values(patternWheelData));
+            createNetworkWheel('conceptWheel', Object.values(conceptWheelData.question));
+            createNetworkWheel('wordWheel', ['Ready', 'to', 'generate']);
+            
+            addConnectionLines();
+        }
+        
+        function createNetworkWheel(wheelId, data) {
+            const wheel = document.getElementById(wheelId);
+            if (!wheel) return;
+            
+            wheel.innerHTML = '';
+            wheel.style.background = '';
+            
+            let currentAngle = 0;
+            const sections = [];
+            
+            const items = typeof data[0] === 'string' ? 
+                data.map(d => ({text: d, prob: 1/data.length})) : 
+                data;
+            
+            items.forEach((item, i) => {
+                const prob = item.prob || 1/items.length;
+                const angle = prob * 360;
+                const endAngle = currentAngle + angle;
+                
+                let color;
+                if (prob > 0.4) {
+                    color = '#10b981';
+                } else if (prob > 0.2) {
+                    color = '#f59e0b';
+                } else {
+                    color = '#8b5cf6';
+                }
+                
+                sections.push({
+                    start: currentAngle,
+                    end: endAngle,
+                    color: color
+                });
+                
+                currentAngle = endAngle;
+            });
+            
+            const gradientParts = [];
+            sections.forEach(section => {
+                const startPercent = (section.start / 360) * 100;
+                const endPercent = (section.end / 360) * 100;
+                gradientParts.push(`${section.color} ${startPercent}% ${endPercent}%`);
+            });
+            
+            wheel.style.background = `conic-gradient(${gradientParts.join(', ')})`;
+            
+            const centerLabel = document.createElement('div');
+            centerLabel.style.position = 'absolute';
+            centerLabel.style.top = '50%';
+            centerLabel.style.left = '50%';
+            centerLabel.style.transform = 'translate(-50%, -50%)';
+            centerLabel.style.color = 'white';
+            centerLabel.style.fontWeight = 'bold';
+            centerLabel.style.fontSize = '2rem';
+            centerLabel.style.textShadow = '0 2px 4px rgba(0,0,0,0.3)';
+            
+            if (items[0].emoji) {
+                centerLabel.textContent = items[0].emoji;
+            } else {
+                centerLabel.textContent = items[0].text ? items[0].text.substring(0, 3) : '?';
+            }
+            
+            wheel.appendChild(centerLabel);
+        }
+        
+        function addConnectionLines() {
+            const wheelsRow = document.getElementById('wheelsRow');
+            if (!wheelsRow) return;
+            
+            document.querySelectorAll('.connection-line').forEach(line => line.remove());
+            
+            const line1 = document.createElement('div');
+            line1.className = 'connection-line';
+            line1.style.position = 'absolute';
+            line1.style.left = '25%';
+            line1.style.top = '50%';
+            line1.style.width = '20%';
+            wheelsRow.appendChild(line1);
+            
+            const line2 = document.createElement('div');
+            line2.className = 'connection-line';
+            line2.style.position = 'absolute';
+            line2.style.left = '55%';
+            line2.style.top = '50%';
+            line2.style.width = '20%';
+            wheelsRow.appendChild(line2);
+            
+            const backLine = document.createElement('div');
+            backLine.className = 'connection-line backward';
+            backLine.style.position = 'absolute';
+            backLine.style.left = '25%';
+            backLine.style.bottom = '30%';
+            backLine.style.width = '50%';
+            backLine.style.opacity = '0.2';
+            wheelsRow.appendChild(backLine);
+        }
+        
+        // Set AI Mode
+        function setAIMode(mode) {
+            aiMode = mode;
+            const modeDescription = document.getElementById('modeDescription');
+            const aiDisclosure = document.getElementById('aiDisclosure');
+            
+            if (mode === 'simulation') {
+                modeDescription.textContent = 'Currently using simplified simulation to demonstrate the concept';
+                aiDisclosure.style.display = 'none';
+            } else {
+                modeDescription.textContent = 'Using Google Gemini to generate real AI responses';
+                aiDisclosure.style.display = 'block';
+            }
+        }
+        
+        // Call Gemini API
+        async function callGeminiAPI(prompt) {
+            try {
+                const response = await fetch('/api/gemini', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            role: 'user',
+                            parts: [{
+                                text: prompt
+                            }]
+                        }]
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
+                return text;
+                
+            } catch (error) {
+                console.error('Gemini API error:', error);
+                throw error;
+            }
+        }
+        
+        async function runNetwork() {
+            const input = document.getElementById('networkInput').value || 'cat';
+            const output = document.getElementById('networkOutput');
+            const explanation = document.getElementById('networkExplanation');
+            
+            // Update layer status
+            document.getElementById('layer1Status').textContent = 'Processing...';
+            document.getElementById('layer2Status').textContent = 'Waiting';
+            document.getElementById('layer3Status').textContent = 'Waiting';
+            
+            if (aiMode === 'real') {
+                try {
+                    // Layer 1: Context Detection
+                    animateConnection(0);
+                    const layer1Prompt = `You are simulating a neural network layer. Given the input "${input}", classify it as one of: question, statement, or command. Respond with ONLY the single word classification, nothing else.`;
+                    
+                    let patternType = 'statement';
+                    try {
+                        const layer1Response = await callGeminiAPI(layer1Prompt);
+                        patternType = layer1Response.toLowerCase().trim();
+                        if (!['question', 'statement', 'command'].includes(patternType)) {
+                            patternType = 'statement';
+                        }
+                    } catch (error) {
+                        // Fallback to simulation logic
+                        if (input.includes('?') || input.includes('what') || input.includes('why')) {
+                            patternType = 'question';
+                        } else if (input.includes('!') || input.includes('do') || input.includes('make')) {
+                            patternType = 'command';
+                        }
+                    }
+                    
+                    // Update wheel 1
+                    const patternProbs = Object.keys(patternWheelData).map(key => {
+                        return {
+                            emoji: patternWheelData[key].emoji,
+                            prob: key === patternType ? 0.7 : 0.15
+                        };
+                    });
+                    createNetworkWheel('patternWheel', patternProbs);
+                    document.getElementById('layer1Status').textContent = patternType;
+                    
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Layer 2: Action Processing
+                    animateConnection(1);
+                    document.getElementById('layer2Status').textContent = 'Processing...';
+                    
+                    const layer2Prompt = `You are simulating a neural network layer. The input "${input}" was classified as a ${patternType}. Now classify the action as one of: ${patternType === 'question' ? 'what, why, how' : patternType === 'statement' ? 'fact, opinion, description' : 'action, object, modifier'}. Respond with ONLY the single word, nothing else.`;
+                    
+                    let selectedConcept = 'fact';
+                    try {
+                        const layer2Response = await callGeminiAPI(layer2Prompt);
+                        selectedConcept = layer2Response.toLowerCase().trim();
+                    } catch (error) {
+                        // Fallback
+                        const conceptData = conceptWheelData[patternType];
+                        const concepts = Object.keys(conceptData);
+                        selectedConcept = concepts[Math.floor(Math.random() * concepts.length)];
+                    }
+                    
+                    // Update wheel 2
+                    const conceptData = conceptWheelData[patternType];
+                    createNetworkWheel('conceptWheel', Object.values(conceptData));
+                    document.getElementById('layer2Status').textContent = selectedConcept;
+                    
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Layer 3: Output Generation
+                    animateConnection(2);
+                    document.getElementById('layer3Status').textContent = 'Generating...';
+                    
+                    const layer3Prompt = `Complete this sentence naturally with exactly ONE word: "${input}" → The next logical word is:`;
+                    
+                    let finalWord = 'output';
+                    try {
+                        const layer3Response = await callGeminiAPI(layer3Prompt);
+                        // Extract first word from response
+                        finalWord = layer3Response.trim().split(/\s+/)[0].replace(/[^\w]/g, '').toLowerCase();
+                        if (!finalWord) finalWord = 'generated';
+                    } catch (error) {
+                        // Fallback
+                        const words = wordWheelData[selectedConcept] || ['output'];
+                        finalWord = words[Math.floor(Math.random() * words.length)];
+                    }
+                    
+                    // Update wheel 3
+                    createNetworkWheel('wordWheel', [finalWord]);
+                    document.getElementById('layer3Status').textContent = finalWord;
+                    
+                    output.textContent = `Input: "${input}" → AI Output: "${finalWord}"`;
+                    explanation.textContent = `Real AI processed: ${patternType} → ${selectedConcept} → ${finalWord}`;
+                    
+                } catch (error) {
+                    output.textContent = 'AI temporarily unavailable - falling back to simulation';
+                    explanation.textContent = 'The AI service is not responding. Try the simulation mode!';
+                    
+                    // Reset status
+                    document.getElementById('layer1Status').textContent = 'Error';
+                    document.getElementById('layer2Status').textContent = 'Error';
+                    document.getElementById('layer3Status').textContent = 'Error';
+                }
+                
+            } else {
+                // Original simulation code
+                rng = mulberry32(Date.now());
+                
+                animateConnection(0);
+                document.getElementById('layer1Status').textContent = 'Processing...';
+                
+                let patternType = 'statement';
+                if (input.includes('?') || input.includes('what') || input.includes('why')) {
+                    patternType = 'question';
+                } else if (input.includes('!') || input.includes('do') || input.includes('make')) {
+                    patternType = 'command';
+                }
+                
+                const patternProbs = Object.keys(patternWheelData).map(key => {
+                    return {
+                        emoji: patternWheelData[key].emoji,
+                        prob: key === patternType ? 0.7 : 0.15
+                    };
+                });
+                createNetworkWheel('patternWheel', patternProbs);
+                document.getElementById('layer1Status').textContent = patternType;
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                animateConnection(1);
+                document.getElementById('layer2Status').textContent = 'Processing...';
+                
+                const conceptData = conceptWheelData[patternType];
+                createNetworkWheel('conceptWheel', Object.values(conceptData));
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                const concepts = Object.keys(conceptData);
+                const conceptProbs = concepts.map(c => conceptData[c].prob);
+                const selectedConcept = concepts[Math.floor(rng() * concepts.length)];
+                document.getElementById('layer2Status').textContent = selectedConcept;
+                
+                animateConnection(2);
+                document.getElementById('layer3Status').textContent = 'Generating...';
+                
+                const words = wordWheelData[selectedConcept] || ['output'];
+                createNetworkWheel('wordWheel', words);
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                const finalWord = words[Math.floor(rng() * words.length)];
+                document.getElementById('layer3Status').textContent = finalWord;
+                
+                output.textContent = `Input: "${input}" → Output: "${finalWord}"`;
+                explanation.textContent = `Pattern: ${patternType} → Concept: ${selectedConcept} → Word: ${finalWord}`;
+                
+                if (networkMode === 'train' || parseFloat(document.getElementById('backwardFlow')?.value || 30) > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    animateBackwardFlow();
+                }
+            }
+        }
+        
+        async function autoDemo() {
+            const examples = ['Cat', 'Why', 'Play', 'Dog', 'Sleep'];
+            for (const example of examples) {
+                document.getElementById('networkInput').value = example;
+                await runNetwork();
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+        
+        function animateConnection(index) {
+            const lines = document.querySelectorAll('.connection-line:not(.backward)');
+            lines.forEach((line, i) => {
+                if (i === index) {
+                    line.classList.add('active');
+                } else {
+                    line.classList.remove('active');
+                }
+            });
+        }
+        
+        function animateBackwardFlow() {
+            const backLine = document.querySelector('.connection-line.backward');
+            if (backLine) {
+                backLine.classList.add('active');
+                setTimeout(() => {
+                    backLine.classList.remove('active');
+                }, 1000);
+            }
+        }
+        
+        function resetNetwork() {
+            createNetworkWheel('patternWheel', Object.values(patternWheelData));
+            createNetworkWheel('conceptWheel', Object.values(conceptWheelData.question));
+            createNetworkWheel('wordWheel', ['Ready', 'to', 'generate']);
+            
+            document.getElementById('networkOutput').textContent = 'Type "Cat", "Dog", or any word to see how layers process it!';
+            document.getElementById('networkExplanation').textContent = 'Each layer transforms the input based on patterns it learned - exactly like our spinner wheels!';
+            document.getElementById('networkInput').value = '';
+            
+            // Reset layer statuses
+            document.getElementById('layer1Status').textContent = 'Ready';
+            document.getElementById('layer2Status').textContent = 'Waiting';
+            document.getElementById('layer3Status').textContent = 'Waiting';
+            
+            document.querySelectorAll('.connection-line').forEach(line => {
+                line.classList.remove('active');
+            });
+        }
+        
+        function updateConnections() {
+            const forward1 = parseFloat(document.getElementById('connection1').value) / 100;
+            const forward2 = parseFloat(document.getElementById('connection2').value) / 100;
+            const backward = parseFloat(document.getElementById('backwardFlow').value) / 100;
+            
+            const lines = document.querySelectorAll('.connection-line');
+            if (lines[0]) lines[0].style.height = (3 + forward1 * 7) + 'px';
+            if (lines[1]) lines[1].style.height = (3 + forward2 * 7) + 'px';
+            if (lines[2]) lines[2].style.opacity = backward;
+            
+            networkConnections = { forward1, forward2, backward };
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', () => {
+            document.querySelectorAll('.big-btn').forEach(btn => {
+                btn.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        btn.click();
+                    }
+                });
+            });
+        });
     </script>
 </body>
 </html>
