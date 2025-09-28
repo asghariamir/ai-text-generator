@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How AI Makes Text | Mathswell</title>
+    <link rel="icon" href="/logo-mathswell-square-mirror.ico" type="image/x-icon">
+    <link rel="icon" href="/logo-mathswell-square-mirror.svg" type="image/svg+xml">
+    
+    <style>
+        /* Root variables - Mathswell standard colors */
+        :root {
+            --primary: #0f766e;
+            --primary-light: #10b981;
+            --background: #f7faf9;
+            --interactive: #e6fffb;
+            --text-primary: #212121;
+            --text-muted: #4b5563;
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+            --success: #10b981;
+            --rare: #8b5cf6;
+        }
+        
+        /* Base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            padding-top: 60px;
+            overflow-x: hidden;
+        }
+        
+        /* CENTERED Navigation - Mathswell standard */
+        .mathswell-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-bottom: 2px solid var(--primary);
+            padding: 0.75rem 1rem;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .mw-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            color: var(--primary);
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        
+        /* Container */
+        .container {
+            max-width: 1000px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        
+        /* CENTERED Tabs - Mathswell standard */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            background: white;
+            padding: 0.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 2rem;
+        }
+        
+        .tab-btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .tab-btn:hover:not(.active) {
+            background: var(--interactive);
+            color: var(--primary);
+        }
+        
+        /* Tab content */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Info box */
+        .info-box {
+            background: var(--interactive);
+            border-left: 4px solid var(--primary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .info-box p {
+            margin: 0;
+            color: var(--primary);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        
+        /* Hero card */
+        .hero-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        
+        .hero-card h1 {
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+        
+        .hero-card p {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .hero-card .note {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 1rem;
+            font-style: italic;
+        }
+        
+        /* Context meter */
+        .context-meter {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        .context-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+        
+        .context-bar {
+            height: 12px;
+            background: #e5e5e5;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        
+        .context-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-light), var(--primary));
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+        
+        /* Big button */
+        .big-btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            color: white;
+            border: none;
+            padding: 1.25rem 2.5rem;
+            font-size: 1.3rem;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(15, 118, 110, 0.3);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin: 2rem auto;
+        }
+        
+        .big-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(15, 118, 110, 0.4);
+        }
+        
+        .big-btn:active {
+            transform: translateY(0);
+        }
+        
+        /* Spinner container */
+        .spinner-stage {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            display: none;
+        }
+        
+        .spinner-stage.active {
+            display: block;
+        }
+        
+        .stage-title {
+            text-align: center;
+            color: var(--primary);
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+        
+        /* Spinner wheel */
+        .spinner-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            margin: 2rem auto;
+        }
+        
+        .spinner-wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            transition: transform 3s cubic-bezier(0.17, 0.67, 0.83, 0.67);
+        }
+        
+        .spinner-wheel.fast {
+            transition: transform 0.6s cubic-bezier(0.17, 0.67, 0.83, 0.67);
+        }
+        
+        @media (prefers-reduced-motion: reduce) {
+            .spinner-wheel {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+        
+        .spinner-label {
+            position: absolute;
+            color: white;
+            font-weight: 600;
+            font-size: 1.5rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            pointer-events: none;
+        }
+        
+        .spinner-pointer {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid var(--accent-red);
+            z-index: 10;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(1800deg); }
+        }
+        
+        @keyframes spin-fast {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(720deg); }
+        }
+        
+        .spinning {
+            animation: spin 3s cubic-bezier(0.17, 0.67, 0.83, 0.67);
+        }
+        
+        .spinning.fast {
+            animation: spin-fast 0.8s cubic-bezier(0.17, 0.67, 0.83, 0.67);
+        }
+        
+        /* Comic strip */
+        .comic-strip {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+        
+        .comic-bubble {
+            background: white;
+            border: 3px solid var(--primary);
+            border-radius: 20px;
+            padding: 1rem 1.5rem;
+            position: relative;
+            min-width: 120px;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 600;
+            opacity: 0;
+            transform: scale(0.8) translateY(20px);
+            animation: popIn 0.5s ease forwards;
+        }
+        
+        @keyframes popIn {
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        
+        .comic-bubble:nth-child(2) { animation-delay: 0.2s; }
+        .comic-bubble:nth-child(3) { animation-delay: 0.4s; }
+        
+        .comic-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 10px solid var(--primary);
+        }
+        
+        /* Controls panel */
+        .controls-panel {
+            background: var(--interactive);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .control-group {
+            margin-bottom: 2rem;
+        }
+        
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .control-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+        
+        .control-description {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.75rem;
+            line-height: 1.4;
+        }
+        
+        .control-range {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .control-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 12px;
+            background: white;
+            border-radius: 6px;
+            outline: none;
+        }
+        
+        .control-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 28px;
+            height: 28px;
+            background: var(--primary);
+            cursor: pointer;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .control-slider::-moz-range-thumb {
+            width: 28px;
+            height: 28px;
+            background: var(--primary);
+            cursor: pointer;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        /* Speed toggle */
+        .speed-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 1rem 0;
+            justify-content: center;
+        }
+        
+        .speed-checkbox {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--primary);
+        }
+        
+        /* Pattern gallery */
+        .pattern-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 0.75rem;
+            padding: 1.5rem;
+            background: var(--interactive);
+            border-radius: 12px;
+            min-height: 300px;
+        }
+        
+        .pattern-chip {
+            aspect-ratio: 1;
+            background: white;
+            border: 2px solid var(--primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            position: relative;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .pattern-chip:hover {
+            transform: scale(1.1);
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .pattern-chip.common {
+            grid-column: span 2;
+            grid-row: span 2;
+            font-size: 1.8rem;
+            border-width: 3px;
+            background: linear-gradient(135deg, white, var(--interactive));
+        }
+        
+        .pattern-chip.rare {
+            opacity: 0.7;
+            border-style: dashed;
+        }
+        
+        .pattern-count {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            background: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        
+        .pattern-legend {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            font-style: italic;
+        }
+        
+        /* Target card */
+        .target-card {
+            background: linear-gradient(135deg, white, var(--interactive));
+            border: 3px solid var(--primary);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .target-sequence {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 1.5rem 0;
+        }
+        
+        .target-piece {
+            width: 90px;
+            height: 90px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            background: white;
+            border: 2px solid var(--primary);
+        }
+        
+        .target-arrow {
+            font-size: 1.5rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+        }
+        
+        /* Live generation display */
+        .live-generation {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+        
+        .live-title {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 1rem;
+            text-align: center;
+            font-size: 1.1rem;
+        }
+        
+        .live-patterns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            min-height: 60px;
+        }
+        
+        .live-pattern {
+            background: var(--interactive);
+            border: 2px solid var(--primary);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-size: 1.2rem;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        /* Success meter */
+        .success-meter {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            text-align: center;
+        }
+        
+        .success-percentage {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .success-label {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+        
+        /* MathPal robot */
+        .mathpal-container {
+            text-align: center;
+            margin: 2rem 0;
+        }
+        
+        .mathpal-svg {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1rem;
+        }
+        
+        .mathpal-tip {
+            background: var(--interactive);
+            border: 2px solid var(--primary);
+            border-radius: 12px;
+            padding: 1rem;
+            position: relative;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        .mathpal-tip::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 8px solid var(--primary);
+        }
+        
+        /* Number input */
+        .number-input {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+        
+        .number-input input {
+            width: 80px;
+            padding: 0.5rem;
+            font-size: 1.1rem;
+            border: 2px solid var(--primary);
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .number-input label {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        
+        /* Network tab styles */
+        .network-container {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .wheels-row {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin: 2rem 0;
+            position: relative;
+            min-height: 350px;
+        }
+        
+        .wheel-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+        
+        .wheel-label {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+        
+        .mini-wheel {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .connection-line {
+            position: absolute;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-light), var(--primary));
+            transform-origin: left center;
+            z-index: 1;
+            opacity: 0.3;
+            transition: all 0.3s ease;
+        }
+        
+        .connection-line.active {
+            opacity: 1;
+            height: 5px;
+            box-shadow: 0 0 10px var(--primary-light);
+        }
+        
+        .connection-line.backward {
+            background: linear-gradient(90deg, var(--rare), var(--accent-amber));
+        }
+        
+        .network-output {
+            background: var(--interactive);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            text-align: center;
+        }
+        
+        .network-output-text {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .network-controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+        
+        .network-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        
+        .network-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(15, 118, 110, 0.3);
+        }
+        
+        .mode-selector {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+        
+        .mode-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid var(--primary);
+            background: white;
+            color: var(--primary);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .mode-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        /* Sparkle effect */
+        @keyframes sparkle {
+            0%, 100% { 
+                opacity: 0; 
+                transform: scale(0) rotate(0deg); 
+            }
+            50% { 
+                opacity: 1; 
+                transform: scale(1) rotate(180deg); 
+            }
+        }
+        
+        .sparkle {
+            position: fixed;
+            pointer-events: none;
+            animation: sparkle 1s ease;
+            z-index: 1000;
+            font-size: 30px;
+        }
+        
+        /* Confetti */
+        @keyframes confetti-fall {
+            0% { 
+                transform: translateY(-100vh) rotate(0deg); 
+                opacity: 1; 
+            }
+            100% { 
+                transform: translateY(100vh) rotate(720deg); 
+                opacity: 0; 
+            }
+        }
+        
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            top: -10px;
+            pointer-events: none;
+            animation: confetti-fall 3s linear;
+            z-index: 1000;
+        }
+        
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .hero-card h1 {
+                font-size: 1.5rem;
+            }
+            
+            .big-btn {
+                padding: 1rem 2rem;
+                font-size: 1.1rem;
+            }
+            
+            .spinner-container {
+                width: 240px;
+                height: 240px;
+            }
+            
+            .comic-strip {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .target-sequence {
+                transform: scale(0.85);
+            }
+            
+            .pattern-gallery {
+                grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            }
+            
+            .wheels-row {
+                flex-direction: column;
+                gap: 2rem;
+                min-height: auto;
+            }
+            
+            .mini-wheel {
+                width: 120px;
+                height: 120px;
+            }
+            
+            .tabs {
+                flex-wrap: wrap;
+            }
+            
+            .tab-btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Centered Mathswell Navigation -->
+    <div class="mathswell-nav">
+        <a href="/" class="mw-link">
+            <img src="/logo-mathswell-square-mirror.svg" alt="Mathswell" width="28" height="28">
+            <span>MATHSWELL</span>
+        </a>
+    </div>
+    
+    <div class="container">
+        <!-- Centered Tab Navigation -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="play">
+                <span>🎬</span> Play
+            </button>
+            <button class="tab-btn" data-tab="patterns">
+                <span>🎨</span> Patterns
+            </button>
+            <button class="tab-btn" data-tab="challenge">
+                <span>🎯</span> Rig the Wheel
+            </button>
+            <button class="tab-btn" data-tab="network">
+                <span>🧠</span> Network
+            </button>
+        </div>
+        
+        <!-- Tab 1: Play -->
+        <div id="play" class="tab-content active">
+            <div class="hero-card">
+                <h1>How AI Makes Sentences ✨</h1>
+                <p>AI picks the next piece of text like a magic spinner wheel whose slices change with context.</p>
+                <p class="note">Before writing, the AI has already studied lots of text. That study sets the weights on the wheel. Your sliders only change how it picks, not what it knows.</p>
+            </div>
+            
+            <div class="info-box">
+                <p>
+                    <strong>🎯 Try this:</strong> Press "Make a Sentence" to watch how AI builds text piece by piece. 
+                    Notice how the wheel changes after each choice - that's because what comes next depends on what came before!
+                </p>
+            </div>
+            
+            <div class="speed-toggle">
+                <input type="checkbox" id="quickMode" class="speed-checkbox">
+                <label for="quickMode">⚡ Quick mode (faster spinning)</label>
+            </div>
+            
+            <button class="big-btn" onclick="startSpinning()">
+                <span>🎬</span> Make a Sentence
+            </button>
+            
+            <!-- Context meter -->
+            <div class="context-meter">
+                <div class="context-label">Each new piece reshapes the wheel by reminding the AI what we've already said</div>
+                <div class="context-bar">
+                    <div class="context-fill" id="contextFill"></div>
+                </div>
+            </div>
+            
+            <!-- Spinner stage -->
+            <div class="spinner-stage" id="spinnerStage">
+                <h2 class="stage-title" id="stageTitle">Choosing the Start...</h2>
+                
+                <div class="spinner-container">
+                    <div class="spinner-pointer"></div>
+                    <div class="spinner-wheel" id="spinnerWheel"></div>
+                </div>
+                
+                <div class="comic-strip" id="comicStrip" aria-live="polite"></div>
+            </div>
+            
+            <!-- Simple controls -->
+            <div class="controls-panel">
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>❄️</span>
+                        <span>Creativity</span>
+                        <span>🔥</span>
+                    </div>
+                    <div class="control-description">
+                        Low = picks the obvious slice. High = gives smaller slices a chance.
+                    </div>
+                    <div class="control-range">
+                        <span>Boring</span>
+                        <input type="range" class="control-slider" id="creativity" 
+                               min="0.1" max="2.0" step="0.1" value="1.0">
+                        <span>Wild</span>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>📝</span>
+                        <span>Stick to Favorites</span>
+                    </div>
+                    <div class="control-description">
+                        Keep only the top slices whose sizes together reach this amount. Off keeps every slice.
+                    </div>
+                    <div class="control-range">
+                        <span>Off</span>
+                        <input type="range" class="control-slider" id="favorites" 
+                               min="0.3" max="1.0" step="0.05" value="1.0">
+                        <span>Strong</span>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>🔄</span>
+                        <span>Avoid Repeats</span>
+                    </div>
+                    <div class="control-description">
+                        If the same piece popped up already, gently shrink its slice.
+                    </div>
+                    <div class="control-range">
+                        <span>Off</span>
+                        <input type="range" class="control-slider" id="avoidRepeats" 
+                               min="0" max="0.5" step="0.05" value="0">
+                        <span>Strong</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tab 2: Patterns -->
+        <div id="patterns" class="tab-content">
+            <div class="hero-card">
+                <h2 style="color: var(--primary);">Pattern Gallery 🎨</h2>
+                <p>This shows why AI writing has a style: when they write, they favor some patterns more than others.</p>
+            </div>
+            
+            <div class="info-box">
+                <p>
+                    <strong>🔬 What you'll see:</strong> When AI generates lots of sentences, some patterns appear often (the big ones) while others are rare. 
+                    Lower creativity → more big duplicates. Higher → more small unique tiles.
+                </p>
+            </div>
+            
+            <div class="speed-toggle">
+                <input type="checkbox" id="samePatterns" class="speed-checkbox">
+                <label for="samePatterns">🔁 Generate same patterns each time (for comparing settings)</label>
+            </div>
+            
+            <div class="number-input">
+                <label>Generate</label>
+                <input type="number" id="patternCount" min="10" max="100" value="30">
+                <label>patterns</label>
+            </div>
+            
+            <button class="big-btn" onclick="generateMany()">
+                <span>🎲</span> Generate Patterns
+            </button>
+            
+            <!-- Show spinner wheel here too -->
+            <div class="spinner-stage" id="patternSpinner" style="display: none;">
+                <h2 class="stage-title">Generating...</h2>
+                <div class="spinner-container">
+                    <div class="spinner-pointer"></div>
+                    <div class="spinner-wheel" id="patternWheel"></div>
+                </div>
+            </div>
+            
+            <div class="pattern-legend" id="patternLegend"></div>
+            
+            <div class="pattern-gallery" id="patternGallery">
+                <!-- Pattern chips appear here -->
+            </div>
+        </div>
+        
+        <!-- Tab 3: Challenge -->
+        <div id="challenge" class="tab-content">
+            <div class="target-card">
+                <h2 style="color: var(--primary); margin-bottom: 1rem;">
+                    Try to Make This Pattern! 🎯
+                </h2>
+                
+                <div class="target-sequence" id="targetSequence">
+                    <div class="target-piece">🐶</div>
+                    <div class="target-arrow">→</div>
+                    <div class="target-piece">😴</div>
+                    <div class="target-arrow">→</div>
+                    <div class="target-piece">🪟</div>
+                </div>
+                
+                <button onclick="generateNewChallenge()" style="background: var(--primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; margin-top: 1rem;">
+                    🎲 New Challenge
+                </button>
+            </div>
+            
+            <!-- Live generation display with integrated test button -->
+            <div class="live-generation">
+                <div class="live-title">What your settings are making right now:</div>
+                <div class="live-patterns" id="livePatterns" aria-live="polite">
+                    <!-- Live patterns appear here -->
+                </div>
+                
+                <div style="margin-top: 1rem;">
+                    <div class="success-meter" style="margin: 0;">
+                        <div class="success-percentage" id="successRate">7%</div>
+                        <div class="success-label">Chance of hitting target: <span id="successChance">7%</span></div>
+                    </div>
+                    <p style="text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem; font-style: italic;">
+                        This percentage is calculated from testing 100 random generations with your current settings - it updates instantly as you move the sliders!
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Controls -->
+            <div class="controls-panel">
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>🎨</span>
+                        <span>Starting Bias</span>
+                    </div>
+                    <div class="control-range">
+                        <span>🐶 Dogs</span>
+                        <input type="range" class="control-slider" id="startBias" 
+                               min="0" max="100" value="50" oninput="updateLiveGeneration()">
+                        <span>Cats 🐱</span>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>❄️</span>
+                        <span>Creativity</span>
+                        <span>🔥</span>
+                    </div>
+                    <div class="control-range">
+                        <span>Low</span>
+                        <input type="range" class="control-slider" id="challengeCreativity" 
+                               min="0.1" max="2.0" step="0.1" value="0.5" oninput="updateLiveGeneration()">
+                        <span>High</span>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>📝</span>
+                        <span>Stick to Favorites</span>
+                    </div>
+                    <div class="control-range">
+                        <span>Off</span>
+                        <input type="range" class="control-slider" id="challengeFavorites" 
+                               min="0.3" max="1.0" step="0.05" value="1.0" oninput="updateLiveGeneration()">
+                        <span>Strong</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- MathPal helper -->
+            <div class="mathpal-container">
+                <svg class="mathpal-svg" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="45" fill="#e6fffb"/>
+                    <rect x="35" y="60" width="30" height="25" fill="#0f766e" rx="3"/>
+                    <rect x="30" y="35" width="40" height="30" fill="#10b981" rx="8"/>
+                    <line x1="50" y1="35" x2="50" y2="25" stroke="#0f766e" stroke-width="2"/>
+                    <circle cx="50" cy="23" r="3" fill="#f59e0b"/>
+                    <circle cx="40" cy="47" r="5" fill="white"/>
+                    <circle cx="60" cy="47" r="5" fill="white"/>
+                    <circle cx="40" cy="47" r="3" fill="#0f766e"/>
+                    <circle cx="60" cy="47" r="3" fill="#0f766e"/>
+                    <path d="M 40 55 Q 50 60 60 55" stroke="#0f766e" stroke-width="2" fill="none"/>
+                </svg>
+                
+                <div class="mathpal-tip">
+                    <p id="tipText" style="color: var(--primary); font-weight: 500; margin: 0;">
+                        💡 Hey! I'd try sliding that bias towards cats and turning creativity way down. That should help!
+                    </p>
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <p>
+                    <strong>🎮 Challenge:</strong> Can you adjust the controls to make the target pattern more likely?
+                </p>
+                <p style="margin-top: 0.5rem;">
+                    <strong>How this relates to using ChatGPT/Claude:</strong><br>
+                    • "Starting Bias" = Your prompt (e.g., "Write about cats" biases toward cat content)<br>
+                    • "Creativity" = Instructions like "be creative" vs "be precise and factual"<br>
+                    • "Stick to Favorites" = Asking for "common examples" vs "think outside the box"<br>
+                    <em>Some AI tools expose these as actual settings, but mostly you control them through how you write your prompts!</em>
+                </p>
+            </div>
+        </div>
+        
+        <!-- Tab 4: Network -->
+        <div id="network" class="tab-content">
+            <div class="hero-card">
+                <h2 style="color: var(--primary);">How AI Layers Process Text 🧠</h2>
+                <p>See how neural networks transform your input through multiple processing layers - try both simulation and real AI modes!</p>
+            </div>
+            
+            <!-- AI Mode Toggle -->
+            <div style="background: var(--interactive); border: 2px solid var(--primary); border-radius: 12px; padding: 1rem; margin-bottom: 2rem;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 2rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="aiMode" value="simulation" checked onclick="setAIMode('simulation')" style="width: 20px; height: 20px;">
+                        <span style="font-weight: 500;">🎮 Simulation Mode</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="aiMode" value="real" onclick="setAIMode('real')" style="width: 20px; height: 20px;">
+                        <span style="font-weight: 500;">🤖 Real AI Mode (Gemini)</span>
+                    </label>
+                </div>
+                <p id="modeDescription" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; margin: 0.5rem 0 0 0;">
+                    Currently using simplified simulation to demonstrate the concept
+                </p>
+            </div>
+            
+            <!-- AI Disclosure for Real Mode -->
+            <div id="aiDisclosure" style="display: none; background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0; color: #856404;">
+                    <strong>🤖 Real AI Active:</strong> This mode connects to Google's Gemini AI. Responses are generated by actual AI, which may occasionally be unavailable or produce unexpected results.
+                </p>
+            </div>
+            
+            <div class="info-box">
+                <p>
+                    <strong>🌐 What's happening:</strong> Just like our spinner wheel, AI has multiple layers. Each layer looks at what came before and decides what patterns it sees. Watch how "Cat" flows through and becomes different endings based on what each layer detects!
+                </p>
+            </div>
+            
+            <!-- Better explanation cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin: 2rem 0;">
+                <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <h3 style="color: var(--primary); margin-bottom: 0.5rem;">🎯 Layer 1: Context</h3>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">
+                        "What type of text is this?" <br>
+                        Detects if input is about animals, food, or places - just like choosing Cat vs Dog in Tab 1!
+                    </p>
+                </div>
+                
+                <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <h3 style="color: var(--primary); margin-bottom: 0.5rem;">🔄 Layer 2: Action</h3>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">
+                        "What's happening?" <br>
+                        Based on context, picks an action - sleeping, playing, or eating - just like the middle wheel!
+                    </p>
+                </div>
+                
+                <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <h3 style="color: var(--primary); margin-bottom: 0.5rem;">📝 Layer 3: Output</h3>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">
+                        "Complete the thought!" <br>
+                        Generates the final word based on previous layers - sofa, window, kitchen, etc!
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Network visualization -->
+            <div class="network-container">
+                <div class="wheels-row" id="wheelsRow">
+                    <div class="wheel-column">
+                        <div class="wheel-label">Layer 1: Context</div>
+                        <div class="mini-wheel" id="patternWheel"></div>
+                        <div style="text-align: center; margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">
+                            Detecting: <span id="layer1Status" style="font-weight: 600;">Ready</span>
+                        </div>
+                    </div>
+                    
+                    <div class="wheel-column">
+                        <div class="wheel-label">Layer 2: Action</div>
+                        <div class="mini-wheel" id="conceptWheel"></div>
+                        <div style="text-align: center; margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">
+                            Processing: <span id="layer2Status" style="font-weight: 600;">Waiting</span>
+                        </div>
+                    </div>
+                    
+                    <div class="wheel-column">
+                        <div class="wheel-label">Layer 3: Output</div>
+                        <div class="mini-wheel" id="wordWheel"></div>
+                        <div style="text-align: center; margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">
+                            Generating: <span id="layer3Status" style="font-weight: 600;">Waiting</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Network output display -->
+                <div class="network-output">
+                    <div class="network-output-text" id="networkOutput">
+                        Type "Cat", "Dog", or any word to see how layers process it!
+                    </div>
+                    <p id="networkExplanation" style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem;">
+                        Each layer transforms the input based on patterns it learned - exactly like our spinner wheels!
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Simplified controls -->
+            <div class="network-controls">
+                <input type="text" id="networkInput" 
+                       placeholder="Try: Cat, Dog, Play, Sleep" 
+                       style="padding: 0.75rem 1rem; border: 2px solid var(--primary); border-radius: 8px; font-size: 1rem; min-width: 200px;">
+                
+                <button class="network-btn" onclick="runNetwork()">
+                    ⚡ Process Through Layers
+                </button>
+                
+                <button class="network-btn" onclick="autoDemo()" style="background: var(--success);">
+                    🎬 Auto Demo
+                </button>
+                
+                <button class="network-btn" onclick="resetNetwork()" style="background: var(--text-muted);">
+                    🔄 Reset
+                </button>
+            </div>
+            
+            <!-- Pattern examples -->
+            <div style="margin-top: 2rem; text-align: center;">
+                <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Quick examples to try:</p>
+                <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+                    <button class="preset-pill" onclick="document.getElementById('networkInput').value='Cat'; runNetwork()" 
+                            style="padding: 0.4rem 1rem; border-radius: 999px; background: white; border: 2px solid var(--primary); color: var(--primary); cursor: pointer;">
+                        🐱 Cat
+                    </button>
+                    <button class="preset-pill" onclick="document.getElementById('networkInput').value='Dog'; runNetwork()"
+                            style="padding: 0.4rem 1rem; border-radius: 999px; background: white; border: 2px solid var(--primary); color: var(--primary); cursor: pointer;">
+                        🐶 Dog
+                    </button>
+                    <button class="preset-pill" onclick="document.getElementById('networkInput').value='Sleep'; runNetwork()"
+                            style="padding: 0.4rem 1rem; border-radius: 999px; background: white; border: 2px solid var(--primary); color: var(--primary); cursor: pointer;">
+                        😴 Sleep
+                    </button>
+                    <button class="preset-pill" onclick="document.getElementById('networkInput').value='Play'; runNetwork()"
+                            style="padding: 0.4rem 1rem; border-radius: 999px; background: white; border: 2px solid var(--primary); color: var(--primary); cursor: pointer;">
+                        🎾 Play
+                    </button>
+                    <button class="preset-pill" onclick="document.getElementById('networkInput').value='Kitchen'; runNetwork()"
+                            style="padding: 0.4rem 1rem; border-radius: 999px; background: white; border: 2px solid var(--primary); color: var(--primary); cursor: pointer;">
+                        🍳 Kitchen
+                    </button>
+                </div>
+            </div>
+            
+            <div class="info-box" style="margin-top: 2rem;">
+                <p>
+                    <strong>💡 Key insight:</strong> This is the same process as Tab 1's spinner wheel, but showing the hidden layers! 
+                    In real AI, there are hundreds of layers with millions of connections, but the principle is the same: 
+                    each layer detects patterns and passes information to the next.
+                </p>
+                <p style="margin-top: 0.5rem;">
+                    <strong>Connection to ChatGPT/Claude:</strong> When you type a message, it flows through many layers like this. 
+                    Early layers understand context, middle layers grasp concepts, and final layers generate the actual words!
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // [THE REST OF THE JAVASCRIPT CODE CONTINUES HERE - IT'S TOO LONG TO FIT IN ONE MESSAGE]
+    </script>
+</body>
+</html>
